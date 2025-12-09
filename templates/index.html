@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RiderEye Connect</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>RIDER<span class="highlight">EYE</span> CONNECT</h1>
+            <div id="connection-status" class="status-indicator offline">OFFLINE</div>
+        </header>
+
+        <main>
+            <!-- Top Row: Status & Score -->
+            <div class="dashboard-row">
+                <div class="card status-card">
+                    <h2>SYSTEM STATUS</h2>
+                    <div id="main-status" class="big-text safe">SAFE</div>
+                    <div class="sub-metrics">
+                        <div class="metric">
+                            <span class="label">DISTANCE</span>
+                            <span id="dist-val" class="value">0 cm</span>
+                        </div>
+                        <div class="metric">
+                            <span class="label">TILT ANGLE</span>
+                            <span id="tilt-val" class="value">0.0°</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card score-card">
+                    <h2>SAFETY SCORE</h2>
+                    <div class="gauge-container">
+                        <div class="gauge-fill" id="score-fill"></div>
+                        <div class="gauge-text" id="score-val">100</div>
+                    </div>
+                    <p class="score-label">RIDING PERFORMANCE</p>
+                </div>
+            </div>
+
+            <!-- Bottom Row: Incidents -->
+            <div class="dashboard-row">
+                <div class="card incident-card">
+                    <h2>RECENT INCIDENTS</h2>
+                    <ul id="incident-list">
+                        <!-- Incidents will be injected here -->
+                        <li class="placeholder">No incidents recorded.</li>
+                    </ul>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function updateDashboard() {
+            fetch('/api/data')
+                .then(response => response.json())
+                .then(data => {
+                    const status = data.status;
+                    
+                    // Update Connection Status
+                    const connEl = document.getElementById('connection-status');
+                    if (status.status !== "OFFLINE") {
+                        connEl.textContent = "CONNECTED";
+                        connEl.className = "status-indicator online";
+                    } else {
+                        connEl.textContent = "OFFLINE";
+                        connEl.className = "status-indicator offline";
+                    }
+
+                    // Update Main Status
+                    const mainStatusEl = document.getElementById('main-status');
+                    mainStatusEl.textContent = status.status.replace(" - THROTTLE CUT!", "").replace(" - SWERVE DETECTED", "");
+                    
+                    // Color Logic
+                    mainStatusEl.className = "big-text";
+                    if (status.status.includes("COLLISION")) mainStatusEl.classList.add("danger");
+                    else if (status.status.includes("WARNING")) mainStatusEl.classList.add("warning");
+                    else mainStatusEl.classList.add("safe");
+
+                    // Update Metrics0i
+                    document.getElementById('dist-val').textContent = Math.round(status.distance) + " cm";
+                    document.getElementById('tilt-val').textContent = status.tilt.toFixed(1) + "°";
+
+                    // Update Score
+                    const score = Math.round(status.safety_score);
+                    document.getElementById('score-val').textContent = score;
+                    document.getElementById('score-fill').style.height = score + "%";
+                    
+                    // Color Score
+                    const scoreFill = document.getElementById('score-fill');
+                    if (score > 80) scoreFill.style.backgroundColor = "#00ff9d";
+                    else if (score > 50) scoreFill.style.backgroundColor = "#ffb700";
+                    else scoreFill.style.backgroundColor = "#ff003c";
+
+                    // Update Incidents
+                    const list = document.getElementById('incident-list');
+                    list.innerHTML = "";
+                    if (data.incidents.length === 0) {
+                        list.innerHTML = '<li class="placeholder">No incidents recorded.</li>';
+                    } else {
+                        data.incidents.forEach(inc => {
+                            const li = document.createElement('li');
+                            li.className = inc.type.toLowerCase();
+                            li.innerHTML = `
+                                <span class="time">${inc.time}</span>
+                                <span class="msg">${inc.message}</span>
+                            `;
+                            list.appendChild(li);
+                        });
+                    }
+                })
+                .catch(err => console.error("Error fetching data:", err));
+        }
+
+        setInterval(updateDashboard, 500); // Poll every 500ms
+    </script>
+</body>
+</html>
