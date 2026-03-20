@@ -29,6 +29,14 @@
                             <span class="label">TILT ANGLE</span>
                             <span id="tilt-val" class="value">0.0°</span>
                         </div>
+                        <div class="metric">
+                            <span class="label">ALERT</span>
+                            <span id="alert-val" class="value">OFF</span>
+                        </div>
+                        <div class="metric">
+                            <span class="label">SLOWDOWN</span>
+                            <span id="slowdown-val" class="value">0%</span>
+                        </div>
                     </div>
                 </div>
 
@@ -74,7 +82,10 @@
 
                     // Update Main Status
                     const mainStatusEl = document.getElementById('main-status');
-                    mainStatusEl.textContent = status.status.replace(" - THROTTLE CUT!", "").replace(" - SWERVE DETECTED", "");
+                    mainStatusEl.textContent = status.status
+                        .replace(" - ALERT + SLOWDOWN SHOWCASE", "")
+                        .replace(" - SWERVE DETECTED", "")
+                        .replace(" - OBSTACLE AHEAD", "");
                     
                     // Color Logic
                     mainStatusEl.className = "big-text";
@@ -82,9 +93,11 @@
                     else if (status.status.includes("WARNING")) mainStatusEl.classList.add("warning");
                     else mainStatusEl.classList.add("safe");
 
-                    // Update Metrics0i
+                    // Update Metrics
                     document.getElementById('dist-val').textContent = Math.round(status.distance) + " cm";
                     document.getElementById('tilt-val').textContent = status.tilt.toFixed(1) + "°";
+                    document.getElementById('alert-val').textContent = status.alert_active ? "ON" : "OFF";
+                    document.getElementById('slowdown-val').textContent = Math.round(status.slowdown_showcase || 0) + "%";
 
                     // Update Score
                     const score = Math.round(status.safety_score);

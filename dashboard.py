@@ -1,5 +1,4 @@
 from flask import Flask, render_template, jsonify, request
-import time
 from datetime import datetime
 
 app = Flask(__name__)
@@ -9,6 +8,10 @@ current_status = {
     "status": "OFFLINE",
     "distance": 0,
     "tilt": 0.0,
+    "alert_active": False,
+    "slowdown_showcase": 0,
+    "target_conf": 0.0,
+    "target_label": "none",
     "safety_score": 100,
     "timestamp": None
 }
@@ -24,7 +27,7 @@ def index():
 @app.route('/update', methods=['POST'])
 def update_data():
     global current_status
-    data = request.json
+    data = request.json or {}
     
     # Update current status
     current_status.update(data)
@@ -32,13 +35,16 @@ def update_data():
     
     # Logic for Safety Score & Incidents
     # If status is COLLISION, drop score significantly
-    if data.get("status") == "COLLISION IMMINENT - THROTTLE CUT!":
+    status_text = str(data.get("status", "SAFE"))
+
+    if "COLLISION" in status_text:
         current_status["safety_score"] = max(0, current_status["safety_score"] - 5)
-        _log_incident("COLLISION", "Throttle Cut Triggered")
+        _log_incident("COLLISION", "Collision Alert + Slowdown Showcase")
         
-    elif data.get("status") == "WARNING - SWERVE DETECTED":
+    elif "WARNING" in status_text:
         current_status["safety_score"] = max(0, current_status["safety_score"] - 1)
-        _log_incident("WARNING", "Swerve Detected")
+        incident_msg = "Swerve Detected" if "SWERVE" in status_text else "Obstacle Warning"
+        _log_incident("WARNING", incident_msg)
         
     else:
         # Slowly recover score if safe
@@ -70,4 +76,4 @@ def _log_incident(type, message):
         incidents.pop()
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5050)

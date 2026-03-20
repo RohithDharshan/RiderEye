@@ -106,11 +106,14 @@ h2 {
 .sub-metrics {
     display: flex;
     justify-content: space-around;
+    flex-wrap: wrap;
+    gap: 14px;
     margin-top: 30px;
 }
 
 .metric {
     text-align: center;
+    min-width: 120px;
 }
 
 .metric .label {
