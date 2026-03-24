@@ -3,6 +3,7 @@ import math
 import time
 import requests
 import threading
+from collections import deque
 from ultralytics import YOLO
 from sensor_receiver import SensorReceiver
 
@@ -25,6 +26,34 @@ DETECTION_PERSIST_FRAMES = 4
 ALERT_COOLDOWN_SEC = 1.5
 VEHICLE_CLASS_IDS = {1, 2, 3, 5, 7}
 TWO_WHEELER_CLASS_IDS = {1, 3}
+WEATHER_REFRESH_SEC = 300
+START_LAT = 12.9716
+START_LON = 77.5946
+CRUISE_SPEED_KMH = 32.0
+MAX_SPEED_KMH = 85.0
+ROAD_ROUGHNESS_WINDOW = 35
+
+WEATHER_CODE_MAP = {
+    0: "Clear",
+    1: "Mostly clear",
+    2: "Partly cloudy",
+    3: "Overcast",
+    45: "Fog",
+    48: "Rime fog",
+    51: "Light drizzle",
+    53: "Moderate drizzle",
+    55: "Dense drizzle",
+    61: "Light rain",
+    63: "Rain",
+    65: "Heavy rain",
+    71: "Light snow",
+    80: "Rain showers",
+    81: "Heavy showers",
+    95: "Thunderstorm",
+}
+
+def clamp(value, min_val, max_val):
+    return max(min_val, min(max_val, value))
 
 def calculate_distance(pixel_width):
     # D = (W * F) / P
@@ -44,6 +73,97 @@ def calculate_slowdown_showcase(distance_cm):
         ratio = (SAFE_DISTANCE_CM - distance_cm) / max(1, SAFE_DISTANCE_CM - DANGER_DISTANCE_CM)
         return int(35 + (ratio * 30))
     return 0
+
+def accel_magnitude_g(ax, ay, az):
+    magnitude = math.sqrt((ax * ax) + (ay * ay) + (az * az))
+    # If phone is reporting m/s^2, convert approximately to g.
+    if magnitude > 4:
+        return magnitude / 9.81
+    return magnitude
+
+def estimate_speed_kmh(prev_speed, ax, dt, slowdown_showcase, sensor_ok):
+    speed = prev_speed
+
+    if sensor_ok:
+        accel_gain = 18.0
+        speed += ax * dt * accel_gain
+    else:
+        # Drift to a stable cruise speed in demo mode.
+        speed += (CRUISE_SPEED_KMH - speed) * min(1.0, dt * 0.45)
+
+    # Showcase slowdown effect from obstacle logic.
+    speed -= slowdown_showcase * dt * 0.07
+
+    # Natural rolling drag.
+    speed -= speed * dt * 0.025
+    return clamp(speed, 0.0, MAX_SPEED_KMH)
+
+def destination_point(lat, lon, distance_m, bearing_deg):
+    if distance_m <= 0:
+        return lat, lon
+
+    earth_radius_m = 6371000
+    bearing = math.radians(bearing_deg)
+    lat1 = math.radians(lat)
+    lon1 = math.radians(lon)
+    angular_distance = distance_m / earth_radius_m
+
+    lat2 = math.asin(
+        math.sin(lat1) * math.cos(angular_distance)
+        + math.cos(lat1) * math.sin(angular_distance) * math.cos(bearing)
+    )
+    lon2 = lon1 + math.atan2(
+        math.sin(bearing) * math.sin(angular_distance) * math.cos(lat1),
+        math.cos(angular_distance) - math.sin(lat1) * math.sin(lat2),
+    )
+
+    return math.degrees(lat2), math.degrees(lon2)
+
+def fetch_weather_snapshot(lat, lon):
+    try:
+        response = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": round(lat, 4),
+                "longitude": round(lon, 4),
+                "current": "temperature_2m,weather_code,precipitation,wind_speed_10m",
+                "timezone": "auto",
+            },
+            timeout=2.5,
+        )
+        payload = response.json().get("current", {})
+        code = int(payload.get("weather_code", 0))
+        return {
+            "source": "open-meteo",
+            "condition": WEATHER_CODE_MAP.get(code, "Unknown"),
+            "temperature_c": float(payload.get("temperature_2m", 0.0)),
+            "precipitation_mm": float(payload.get("precipitation", 0.0)),
+            "wind_kmh": float(payload.get("wind_speed_10m", 0.0)),
+            "weather_code": code,
+        }
+    except Exception:
+        return None
+
+def classify_road_condition(roughness_index, precipitation_mm, speed_kmh):
+    label = "Smooth"
+    risk = "Low"
+
+    if roughness_index > 0.35:
+        label = "Rough"
+        risk = "Medium"
+    elif roughness_index > 0.20:
+        label = "Moderate"
+        risk = "Low"
+
+    if precipitation_mm > 0.2:
+        label = f"{label} + Wet"
+        risk = "High" if speed_kmh > 35 else "Medium"
+
+    return {
+        "label": label,
+        "risk": risk,
+        "roughness_index": round(roughness_index, 3),
+    }
 
 def send_dashboard_update(data):
     try:
@@ -73,8 +193,24 @@ def main():
     
     last_dashboard_update = 0
     last_alert_time = 0
+    last_weather_fetch = 0
+    last_loop_time = time.time()
     filtered_distance = None
     target_seen_frames = 0
+    speed_kmh = 0.0
+    distance_travelled_km = 0.0
+    latitude = START_LAT
+    longitude = START_LON
+    heading_deg = 82.0
+    roughness_samples = deque(maxlen=ROAD_ROUGHNESS_WINDOW)
+    weather_snapshot = {
+        "source": "fallback",
+        "condition": "Unknown",
+        "temperature_c": 0.0,
+        "precipitation_mm": 0.0,
+        "wind_kmh": 0.0,
+        "weather_code": 0,
+    }
     connection_status = "Checking..."
     connection_color = (200, 200, 200)
 
@@ -83,15 +219,21 @@ def main():
             ret, frame = cap.read()
             if not ret: break
 
+            now = time.time()
+            dt = min(0.2, max(0.01, now - last_loop_time))
+            last_loop_time = now
+
             # Get latest sensor data
             sensor_data = sensors.get_data()
             phone_tilt_angle = sensor_data["tilt_angle"]
+            accel = sensor_data.get("accel", [0, 0, 0])
+            ax = float(accel[0]) if len(accel) > 0 else 0.0
+            ay = float(accel[1]) if len(accel) > 1 else 0.0
+            az = float(accel[2]) if len(accel) > 2 else 0.0
             
             # Check if data is stale (sensor not running)
-            # We can check if the values are exactly 0,0,0 for a long time, 
-            # but for now let's just assume if we get data it's "Connected"
-            # In a real app we'd track the timestamp of the last packet.
-            if sensors.latest_data["accel"] == [0,0,0]:
+            sensor_ok = sensors.latest_data["accel"] != [0, 0, 0]
+            if not sensor_ok:
                 connection_status = "Phone: NO DATA (Press Play?)"
                 connection_color = (0, 0, 255)
             else:
@@ -109,6 +251,9 @@ def main():
             slowdown_showcase = 0
             target_conf = 0.0
             target_label = "none"
+            vehicle_count = 0
+            two_wheeler_count = 0
+            nearby_vehicles = []
             
             # Default overlay info
             cv2.putText(frame, f"Tilt: {phone_tilt_angle:.1f} deg", (10, 70), 
@@ -121,7 +266,7 @@ def main():
             collision_imminent = False
             swerve_detected = False
             warning_obstacle = False
-            candidate_vehicles = []
+            center_lane_candidates = []
 
             _, frame_w = frame.shape[:2]
             center_x = frame_w / 2
@@ -164,25 +309,45 @@ def main():
                     if conf < min_conf_threshold:
                         continue
 
-                    if not in_center_zone:
-                        continue
-
                     vehicle_dist_cm = calculate_distance(box_w)
-                    candidate_vehicles.append(
-                        {
-                            "distance": vehicle_dist_cm,
-                            "conf": conf,
-                            "label": cls_name,
-                            "x1": int(x1),
-                            "y1": int(y1),
-                            "x2": int(x2),
-                            "y2": int(y2),
-                        }
+                    lane = "center" if in_center_zone else "side"
+
+                    vehicle_count += 1
+                    if cls in TWO_WHEELER_CLASS_IDS:
+                        two_wheeler_count += 1
+
+                    det_item = {
+                        "distance": vehicle_dist_cm,
+                        "conf": conf,
+                        "label": cls_name,
+                        "x1": int(x1),
+                        "y1": int(y1),
+                        "x2": int(x2),
+                        "y2": int(y2),
+                        "lane": lane,
+                    }
+                    nearby_vehicles.append(det_item)
+
+                    det_color = (255, 170, 60) if lane == "center" else (180, 140, 40)
+                    cv2.rectangle(frame, (det_item["x1"], det_item["y1"]), (det_item["x2"], det_item["y2"]), det_color, 2)
+                    cv2.putText(
+                        frame,
+                        f"{cls_name} {int(vehicle_dist_cm)}cm",
+                        (det_item["x1"], max(16, det_item["y1"] - 6)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.45,
+                        det_color,
+                        2,
                     )
 
-            if candidate_vehicles:
+                    if in_center_zone:
+                        center_lane_candidates.append(det_item)
+
+            nearby_vehicles.sort(key=lambda item: item["distance"])
+
+            if center_lane_candidates:
                 # Pick nearest in-center vehicle as threat target.
-                target = min(candidate_vehicles, key=lambda item: item["distance"])
+                target = min(center_lane_candidates, key=lambda item: item["distance"])
                 raw_distance = target["distance"]
 
                 if filtered_distance is None:
@@ -233,6 +398,27 @@ def main():
 
                 slowdown_showcase = calculate_slowdown_showcase(dist_cm)
 
+            speed_kmh = estimate_speed_kmh(speed_kmh, ax, dt, slowdown_showcase, sensor_ok)
+            distance_travelled_km += (speed_kmh * dt) / 3600
+
+            heading_deg = (heading_deg + (phone_tilt_angle * 0.015 * dt)) % 360
+            latitude, longitude = destination_point(latitude, longitude, (speed_kmh / 3.6) * dt, heading_deg)
+
+            roughness_samples.append(abs(accel_magnitude_g(ax, ay, az) - 1.0))
+            roughness_index = sum(roughness_samples) / len(roughness_samples) if roughness_samples else 0.0
+
+            if now - last_weather_fetch > WEATHER_REFRESH_SEC:
+                weather_data = fetch_weather_snapshot(latitude, longitude)
+                if weather_data:
+                    weather_snapshot = weather_data
+                last_weather_fetch = now
+
+            road_condition = classify_road_condition(
+                roughness_index,
+                weather_snapshot.get("precipitation_mm", 0.0),
+                speed_kmh,
+            )
+
             # Determine final status based on all detections
             if collision_imminent:
                 status = "COLLISION IMMINENT - ALERT + SLOWDOWN SHOWCASE"
@@ -265,6 +451,26 @@ def main():
                 1,
             )
 
+            cv2.putText(
+                frame,
+                f"Speed: {speed_kmh:.1f} km/h  Distance: {distance_travelled_km:.2f} km",
+                (10, 145),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.52,
+                (220, 220, 220),
+                1,
+            )
+
+            cv2.putText(
+                frame,
+                f"Vehicles: {vehicle_count} (2W: {two_wheeler_count})  Road: {road_condition['label']}",
+                (10, 172),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.52,
+                (220, 220, 220),
+                1,
+            )
+
             if "COLLISION" in status:
                 cv2.rectangle(frame, (0,0), (frame.shape[1], frame.shape[0]), (0,0,255), 20)
 
@@ -280,6 +486,25 @@ def main():
                     "slowdown_showcase": slowdown_showcase,
                     "target_conf": target_conf,
                     "target_label": target_label,
+                    "vehicle_count": vehicle_count,
+                    "two_wheeler_count": two_wheeler_count,
+                    "nearby_vehicles": [
+                        {
+                            "label": item["label"],
+                            "distance_cm": round(item["distance"], 1),
+                            "confidence": round(item["conf"], 2),
+                            "lane": item["lane"],
+                        }
+                        for item in nearby_vehicles[:6]
+                    ],
+                    "speed_kmh": round(speed_kmh, 2),
+                    "distance_travelled_km": round(distance_travelled_km, 3),
+                    "location": {
+                        "lat": round(latitude, 6),
+                        "lon": round(longitude, 6),
+                    },
+                    "weather": weather_snapshot,
+                    "road_condition": road_condition,
                 }
                 # Send in background thread to avoid blocking UI
                 threading.Thread(target=send_dashboard_update, args=(payload,), daemon=True).start()

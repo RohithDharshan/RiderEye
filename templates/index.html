@@ -15,7 +15,21 @@
         </header>
 
         <main>
-            <!-- Top Row: Status & Score -->
+            <div class="dashboard-row">
+                <div class="card control-card">
+                    <h2>DEMO CONTROLS</h2>
+                    <div class="control-bar">
+                        <label for="demo-mode">Demo Mode</label>
+                        <select id="demo-mode">
+                            <option value="normal">Normal</option>
+                            <option value="aggressive">Aggressive Traffic</option>
+                        </select>
+                        <button id="reset-trip-btn" type="button">Reset Trip</button>
+                        <span id="traffic-state" class="chip">Traffic: Stable</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="dashboard-row">
                 <div class="card status-card">
                     <h2>SYSTEM STATUS</h2>
@@ -37,6 +51,14 @@
                             <span class="label">SLOWDOWN</span>
                             <span id="slowdown-val" class="value">0%</span>
                         </div>
+                        <div class="metric">
+                            <span class="label">VEHICLES</span>
+                            <span id="vehicles-val" class="value">0</span>
+                        </div>
+                        <div class="metric">
+                            <span class="label">2-WHEELERS</span>
+                            <span id="twowheel-val" class="value">0</span>
+                        </div>
                     </div>
                 </div>
 
@@ -50,27 +72,167 @@
                 </div>
             </div>
 
-            <!-- Bottom Row: Incidents -->
+            <div class="dashboard-row">
+                <div class="card analytics-card">
+                    <h2>DRIVING ANALYTICS</h2>
+                    <div class="metric-grid">
+                        <div class="metric-item"><span>Current Speed</span><strong id="speed-val">0.0 km/h</strong></div>
+                        <div class="metric-item"><span>Average Speed</span><strong id="avg-speed-val">0.0 km/h</strong></div>
+                        <div class="metric-item"><span>Max Speed</span><strong id="max-speed-val">0.0 km/h</strong></div>
+                        <div class="metric-item"><span>Distance Travelled</span><strong id="trip-dist-val">0.00 km</strong></div>
+                        <div class="metric-item"><span>Moving Time</span><strong id="moving-time-val">00:00</strong></div>
+                        <div class="metric-item"><span>Total Alerts</span><strong id="alerts-val">0</strong></div>
+                    </div>
+                </div>
+
+                <div class="card env-card">
+                    <h2>ROAD & WEATHER</h2>
+                    <div class="metric-grid compact">
+                        <div class="metric-item"><span>Road Condition</span><strong id="road-label">Unknown</strong></div>
+                        <div class="metric-item"><span>Road Risk</span><strong id="road-risk">Low</strong></div>
+                        <div class="metric-item"><span>Temperature</span><strong id="temp-val">0.0 C</strong></div>
+                        <div class="metric-item"><span>Weather</span><strong id="weather-val">Unknown</strong></div>
+                        <div class="metric-item"><span>Rain</span><strong id="rain-val">0.0 mm</strong></div>
+                        <div class="metric-item"><span>Wind</span><strong id="wind-val">0.0 km/h</strong></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-row">
+                <div class="card location-card">
+                    <h2>LOCATION</h2>
+                    <div class="metric-grid compact">
+                        <div class="metric-item"><span>Latitude</span><strong id="lat-val">0.000000</strong></div>
+                        <div class="metric-item"><span>Longitude</span><strong id="lon-val">0.000000</strong></div>
+                    </div>
+                    <a id="map-link" class="map-link" href="#" target="_blank" rel="noopener noreferrer">Open in Maps</a>
+                </div>
+
+                <div class="card vehicles-card">
+                    <h2>MULTI-VEHICLE DETECTION</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Distance</th>
+                                <th>Confidence</th>
+                                <th>Lane</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vehicle-table-body">
+                            <tr><td colspan="4" class="placeholder">No vehicles detected.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div class="dashboard-row">
                 <div class="card incident-card">
                     <h2>RECENT INCIDENTS</h2>
                     <ul id="incident-list">
-                        <!-- Incidents will be injected here -->
                         <li class="placeholder">No incidents recorded.</li>
                     </ul>
+                </div>
+            </div>
+
+            <div class="dashboard-row">
+                <div class="card trend-card">
+                    <h2>LIVE TRENDS (LAST 60-120 POINTS)</h2>
+                    <div class="trend-grid">
+                        <div class="trend-item">
+                            <span>Speed</span>
+                            <canvas id="speed-chart" width="380" height="110"></canvas>
+                        </div>
+                        <div class="trend-item">
+                            <span>Distance</span>
+                            <canvas id="distance-chart" width="380" height="110"></canvas>
+                        </div>
+                        <div class="trend-item">
+                            <span>Road Roughness</span>
+                            <canvas id="roughness-chart" width="380" height="110"></canvas>
+                        </div>
+                        <div class="trend-item">
+                            <span>Alert Counter</span>
+                            <canvas id="alerts-chart" width="380" height="110"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
     <script>
+        function postControl(action, extras = {}) {
+            return fetch('/api/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, ...extras })
+            }).then(r => r.json());
+        }
+
+        function formatDuration(totalSec) {
+            const mins = Math.floor(totalSec / 60);
+            const secs = Math.max(0, totalSec % 60);
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function drawSparkline(canvasId, values, color) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            const data = (values || []).slice(-120);
+            if (data.length < 2) {
+                ctx.fillStyle = 'rgba(200,200,220,0.6)';
+                ctx.font = '12px Roboto';
+                ctx.fillText('Waiting for data...', 12, h / 2);
+                return;
+            }
+
+            const minVal = Math.min(...data);
+            const maxVal = Math.max(...data);
+            const span = Math.max(0.0001, maxVal - minVal);
+
+            ctx.strokeStyle = 'rgba(180,180,220,0.25)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, h - 18);
+            ctx.lineTo(w, h - 18);
+            ctx.stroke();
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            data.forEach((v, idx) => {
+                const x = (idx / (data.length - 1)) * (w - 8) + 4;
+                const y = h - 18 - (((v - minVal) / span) * (h - 28));
+                if (idx === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+
+            ctx.fillStyle = 'rgba(220,220,240,0.9)';
+            ctx.font = '11px Roboto';
+            ctx.fillText(`min ${minVal.toFixed(2)} | max ${maxVal.toFixed(2)}`, 8, 12);
+        }
+
         function updateDashboard() {
             fetch('/api/data')
                 .then(response => response.json())
                 .then(data => {
                     const status = data.status;
+                    const analytics = data.analytics || {};
+                    const controls = data.controls || {};
+                    const trends = data.trends || {};
+                    const weather = status.weather || {};
+                    const road = status.road_condition || {};
+                    const location = status.location || { lat: 0, lon: 0 };
                     
-                    // Update Connection Status
                     const connEl = document.getElementById('connection-status');
                     if (status.status !== "OFFLINE") {
                         connEl.textContent = "CONNECTED";
@@ -80,37 +242,76 @@
                         connEl.className = "status-indicator offline";
                     }
 
-                    // Update Main Status
                     const mainStatusEl = document.getElementById('main-status');
                     mainStatusEl.textContent = status.status
                         .replace(" - ALERT + SLOWDOWN SHOWCASE", "")
                         .replace(" - SWERVE DETECTED", "")
                         .replace(" - OBSTACLE AHEAD", "");
                     
-                    // Color Logic
                     mainStatusEl.className = "big-text";
                     if (status.status.includes("COLLISION")) mainStatusEl.classList.add("danger");
                     else if (status.status.includes("WARNING")) mainStatusEl.classList.add("warning");
                     else mainStatusEl.classList.add("safe");
 
-                    // Update Metrics
                     document.getElementById('dist-val').textContent = Math.round(status.distance) + " cm";
                     document.getElementById('tilt-val').textContent = status.tilt.toFixed(1) + "°";
                     document.getElementById('alert-val').textContent = status.alert_active ? "ON" : "OFF";
                     document.getElementById('slowdown-val').textContent = Math.round(status.slowdown_showcase || 0) + "%";
+                    document.getElementById('vehicles-val').textContent = status.vehicle_count || 0;
+                    document.getElementById('twowheel-val').textContent = status.two_wheeler_count || 0;
 
-                    // Update Score
                     const score = Math.round(status.safety_score);
                     document.getElementById('score-val').textContent = score;
                     document.getElementById('score-fill').style.height = score + "%";
                     
-                    // Color Score
                     const scoreFill = document.getElementById('score-fill');
                     if (score > 80) scoreFill.style.backgroundColor = "#00ff9d";
                     else if (score > 50) scoreFill.style.backgroundColor = "#ffb700";
                     else scoreFill.style.backgroundColor = "#ff003c";
 
-                    // Update Incidents
+                    document.getElementById('speed-val').textContent = (status.speed_kmh || 0).toFixed(1) + " km/h";
+                    document.getElementById('avg-speed-val').textContent = (analytics.avg_speed_kmh || 0).toFixed(1) + " km/h";
+                    document.getElementById('max-speed-val').textContent = (analytics.max_speed_kmh || 0).toFixed(1) + " km/h";
+                    document.getElementById('trip-dist-val').textContent = (status.distance_travelled_km || 0).toFixed(2) + " km";
+                    document.getElementById('moving-time-val').textContent = formatDuration(analytics.moving_time_sec || 0);
+                    document.getElementById('alerts-val').textContent = analytics.alerts_total || 0;
+                    document.getElementById('traffic-state').textContent = `Traffic: ${analytics.traffic_state || 'Stable'}`;
+                    document.getElementById('demo-mode').value = controls.demo_mode || 'normal';
+
+                    document.getElementById('road-label').textContent = road.label || "Unknown";
+                    document.getElementById('road-risk').textContent = road.risk || "Low";
+                    document.getElementById('temp-val').textContent = (weather.temperature_c || 0).toFixed(1) + " C";
+                    document.getElementById('weather-val').textContent = weather.condition || "Unknown";
+                    document.getElementById('rain-val').textContent = (weather.precipitation_mm || 0).toFixed(1) + " mm";
+                    document.getElementById('wind-val').textContent = (weather.wind_kmh || 0).toFixed(1) + " km/h";
+
+                    document.getElementById('lat-val').textContent = (location.lat || 0).toFixed(6);
+                    document.getElementById('lon-val').textContent = (location.lon || 0).toFixed(6);
+                    document.getElementById('map-link').href = `https://maps.google.com/?q=${location.lat || 0},${location.lon || 0}`;
+
+                    drawSparkline('speed-chart', trends.speed_kmh || [], '#00ff9d');
+                    drawSparkline('distance-chart', trends.distance_km || [], '#5ea3ff');
+                    drawSparkline('roughness-chart', trends.roughness || [], '#ffb700');
+                    drawSparkline('alerts-chart', trends.alerts_total || [], '#ff4b7a');
+
+                    const tableBody = document.getElementById('vehicle-table-body');
+                    tableBody.innerHTML = '';
+                    const vehicles = status.nearby_vehicles || [];
+                    if (vehicles.length === 0) {
+                        tableBody.innerHTML = '<tr><td colspan="4" class="placeholder">No vehicles detected.</td></tr>';
+                    } else {
+                        vehicles.forEach(v => {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td>${v.label}</td>
+                                <td>${Math.round(v.distance_cm)} cm</td>
+                                <td>${(v.confidence || 0).toFixed(2)}</td>
+                                <td>${v.lane}</td>
+                            `;
+                            tableBody.appendChild(tr);
+                        });
+                    }
+
                     const list = document.getElementById('incident-list');
                     list.innerHTML = "";
                     if (data.incidents.length === 0) {
@@ -130,7 +331,20 @@
                 .catch(err => console.error("Error fetching data:", err));
         }
 
-        setInterval(updateDashboard, 500); // Poll every 500ms
+        document.getElementById('demo-mode').addEventListener('change', (event) => {
+            postControl('set_mode', { mode: event.target.value })
+                .then(() => updateDashboard())
+                .catch(err => console.error('Mode change failed:', err));
+        });
+
+        document.getElementById('reset-trip-btn').addEventListener('click', () => {
+            postControl('reset_trip')
+                .then(() => updateDashboard())
+                .catch(err => console.error('Trip reset failed:', err));
+        });
+
+        updateDashboard();
+        setInterval(updateDashboard, 500);
     </script>
 </body>
 </html>
