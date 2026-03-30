@@ -1,0 +1,13 @@
+rider_eye.py
+sensor_receiver.py
+*.pt
+**/__pycache__
+*.pyc
+*.pyo
+.env.local
+.env
+.gitignore
+*.md
+task.md
+walkthrough.md
+implementation_plan.md
