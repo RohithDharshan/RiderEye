@@ -15,7 +15,7 @@ FOCAL_LENGTH_CONST = 600 # You need to calibrate this value
 REAL_WIDTH_CAR = 180 # cm (Approx width of a car)
 PHONE_IP = "172.20.10.1" # Default Gateway IP for Hotspot (Phone's IP)
 SENSOR_MODE = "phyphox" # Options: "udp" or "phyphox"
-DASHBOARD_URL = "http://127.0.0.1:5050/update"
+DASHBOARD_URL = "https://ridereye-backend.onrender.com/update"
 MIN_VEHICLE_CONF = 0.35
 MIN_TWO_WHEELER_CONF = 0.30
 TILT_SWERVE_THRESHOLD = 15
@@ -499,6 +499,7 @@ def main():
                     ],
                     "speed_kmh": round(speed_kmh, 2),
                     "distance_travelled_km": round(distance_travelled_km, 3),
+                    "heading_deg": round(heading_deg, 1),
                     "location": {
                         "lat": round(latitude, 6),
                         "lon": round(longitude, 6),

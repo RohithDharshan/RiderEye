@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: ridereye-backend
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn dashboard:app
+    healthCheckPath: /api/data
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10
+      - key: FLASK_ENV
+        value: production

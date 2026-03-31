@@ -11,10 +11,14 @@
     <div class="container">
         <header>
             <h1>RIDER<span class="highlight">EYE</span> CONNECT</h1>
-            <div id="connection-status" class="status-indicator offline">OFFLINE</div>
+            <div class="header-right">
+                <span id="live-time" class="live-time"></span>
+                <div id="connection-status" class="status-indicator offline">OFFLINE</div>
+            </div>
         </header>
 
         <main>
+            <!-- Demo Controls -->
             <div class="dashboard-row">
                 <div class="card control-card">
                     <h2>DEMO CONTROLS</h2>
@@ -30,17 +34,19 @@
                 </div>
             </div>
 
+            <!-- Status + Score + Speed -->
             <div class="dashboard-row">
-                <div class="card status-card">
+                <div class="card status-card" id="status-card">
                     <h2>SYSTEM STATUS</h2>
                     <div id="main-status" class="big-text safe">SAFE</div>
+                    <div id="status-sub" class="status-sub"></div>
                     <div class="sub-metrics">
                         <div class="metric">
-                            <span class="label">DISTANCE</span>
+                            <span class="label">TARGET DIST</span>
                             <span id="dist-val" class="value">0 cm</span>
                         </div>
                         <div class="metric">
-                            <span class="label">TILT ANGLE</span>
+                            <span class="label">TILT</span>
                             <span id="tilt-val" class="value">0.0°</span>
                         </div>
                         <div class="metric">
@@ -64,14 +70,18 @@
 
                 <div class="card score-card">
                     <h2>SAFETY SCORE</h2>
-                    <div class="gauge-container">
-                        <div class="gauge-fill" id="score-fill"></div>
-                        <div class="gauge-text" id="score-val">100</div>
-                    </div>
-                    <p class="score-label">RIDING PERFORMANCE</p>
+                    <canvas id="score-gauge" width="200" height="170"></canvas>
+                    <p class="gauge-label">RIDING PERFORMANCE</p>
+                </div>
+
+                <div class="card speed-card">
+                    <h2>LIVE SPEED</h2>
+                    <canvas id="speed-gauge" width="200" height="170"></canvas>
+                    <p class="gauge-label">KM / H</p>
                 </div>
             </div>
 
+            <!-- Analytics + Env -->
             <div class="dashboard-row">
                 <div class="card analytics-card">
                     <h2>DRIVING ANALYTICS</h2>
@@ -90,7 +100,7 @@
                     <div class="metric-grid compact">
                         <div class="metric-item"><span>Road Condition</span><strong id="road-label">Unknown</strong></div>
                         <div class="metric-item"><span>Road Risk</span><strong id="road-risk">Low</strong></div>
-                        <div class="metric-item"><span>Temperature</span><strong id="temp-val">0.0 C</strong></div>
+                        <div class="metric-item"><span>Temperature</span><strong id="temp-val">0.0°C</strong></div>
                         <div class="metric-item"><span>Weather</span><strong id="weather-val">Unknown</strong></div>
                         <div class="metric-item"><span>Rain</span><strong id="rain-val">0.0 mm</strong></div>
                         <div class="metric-item"><span>Wind</span><strong id="wind-val">0.0 km/h</strong></div>
@@ -98,12 +108,14 @@
                 </div>
             </div>
 
+            <!-- Location + Vehicles -->
             <div class="dashboard-row">
                 <div class="card location-card">
                     <h2>LOCATION</h2>
                     <div class="metric-grid compact">
                         <div class="metric-item"><span>Latitude</span><strong id="lat-val">0.000000</strong></div>
                         <div class="metric-item"><span>Longitude</span><strong id="lon-val">0.000000</strong></div>
+                        <div class="metric-item"><span>Heading</span><strong id="heading-val">—</strong></div>
                     </div>
                     <a id="map-link" class="map-link" href="#" target="_blank" rel="noopener noreferrer">Open in Maps</a>
                 </div>
@@ -115,17 +127,19 @@
                             <tr>
                                 <th>Type</th>
                                 <th>Distance</th>
-                                <th>Confidence</th>
+                                <th>Conf</th>
                                 <th>Lane</th>
+                                <th>Risk</th>
                             </tr>
                         </thead>
                         <tbody id="vehicle-table-body">
-                            <tr><td colspan="4" class="placeholder">No vehicles detected.</td></tr>
+                            <tr><td colspan="5" class="placeholder">No vehicles detected.</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
 
+            <!-- Incidents -->
             <div class="dashboard-row">
                 <div class="card incident-card">
                     <h2>RECENT INCIDENTS</h2>
@@ -135,24 +149,37 @@
                 </div>
             </div>
 
+            <!-- Trends -->
             <div class="dashboard-row">
                 <div class="card trend-card">
-                    <h2>LIVE TRENDS (LAST 60-120 POINTS)</h2>
+                    <h2>LIVE TRENDS</h2>
                     <div class="trend-grid">
                         <div class="trend-item">
-                            <span>Speed</span>
+                            <div class="trend-header">
+                                <span>Speed (km/h)</span>
+                                <span id="trend-speed-cur" class="trend-cur-val" style="color:#00ff9d">—</span>
+                            </div>
                             <canvas id="speed-chart" width="380" height="110"></canvas>
                         </div>
                         <div class="trend-item">
-                            <span>Distance</span>
+                            <div class="trend-header">
+                                <span>Distance (km)</span>
+                                <span id="trend-dist-cur" class="trend-cur-val" style="color:#5ea3ff">—</span>
+                            </div>
                             <canvas id="distance-chart" width="380" height="110"></canvas>
                         </div>
                         <div class="trend-item">
-                            <span>Road Roughness</span>
+                            <div class="trend-header">
+                                <span>Road Roughness</span>
+                                <span id="trend-rough-cur" class="trend-cur-val" style="color:#ffb700">—</span>
+                            </div>
                             <canvas id="roughness-chart" width="380" height="110"></canvas>
                         </div>
                         <div class="trend-item">
-                            <span>Alert Counter</span>
+                            <div class="trend-header">
+                                <span>Alert Count</span>
+                                <span id="trend-alert-cur" class="trend-cur-val" style="color:#ff4b7a">—</span>
+                            </div>
                             <canvas id="alerts-chart" width="380" height="110"></canvas>
                         </div>
                     </div>
@@ -162,6 +189,15 @@
     </div>
 
     <script>
+        const WEATHER_EMOJIS = {
+            0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️',
+            45: '🌫️', 48: '🌫️',
+            51: '🌦️', 53: '🌦️', 55: '🌧️',
+            61: '🌧️', 63: '🌧️', 65: '⛈️',
+            71: '❄️', 80: '🌦️', 81: '🌧️',
+            95: '⛈️'
+        };
+
         function postControl(action, extras = {}) {
             return fetch('/api/control', {
                 method: 'POST',
@@ -176,19 +212,92 @@
             return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
         }
 
-        function drawSparkline(canvasId, values, color) {
+        // Draw a circular arc gauge on a canvas
+        function drawArcGauge(canvasId, value, maxVal, colorFn) {
             const canvas = document.getElementById(canvasId);
             if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
 
+            const cx = w / 2;
+            const cy = h / 2 + 14;
+            const radius = Math.min(cx, cy) - 14;
+            const startAngle = Math.PI * 0.75;   // 135° — bottom-left
+            const sweepAngle = Math.PI * 1.5;    // 270° sweep
+            const ratio = Math.min(1, Math.max(0, value / maxVal));
+            const endAngle = startAngle + sweepAngle * ratio;
+
+            // Background track
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, startAngle, startAngle + sweepAngle);
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.lineWidth = 14;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            // Tick marks
+            for (let i = 0; i <= 4; i++) {
+                const angle = startAngle + (sweepAngle * i / 4);
+                const r1 = radius - 10, r2 = radius + 4;
+                ctx.beginPath();
+                ctx.moveTo(cx + Math.cos(angle) * r1, cy + Math.sin(angle) * r1);
+                ctx.lineTo(cx + Math.cos(angle) * r2, cy + Math.sin(angle) * r2);
+                ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+
+            // Value arc with glow
+            const color = typeof colorFn === 'function' ? colorFn(ratio) : colorFn;
+            if (ratio > 0.005) {
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, startAngle, endAngle);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 14;
+                ctx.lineCap = 'round';
+                ctx.shadowBlur = 18;
+                ctx.shadowColor = color;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            // Center value text
+            const displayVal = value >= 10 ? Math.round(value) : value.toFixed(1);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold 30px Orbitron, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(displayVal, cx, cy - 8);
+
+            // Sub-label
+            ctx.fillStyle = 'rgba(180,180,220,0.55)';
+            ctx.font = '11px Roboto, sans-serif';
+            ctx.fillText(`/ ${maxVal}`, cx, cy + 18);
+        }
+
+        // Draw a gradient-filled sparkline with current value label
+        function drawSparkline(canvasId, values, lineColor, rgbaBase, curValId) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
             const ctx = canvas.getContext('2d');
             const w = canvas.width;
             const h = canvas.height;
             ctx.clearRect(0, 0, w, h);
 
             const data = (values || []).slice(-120);
+
+            if (curValId && data.length > 0) {
+                const el = document.getElementById(curValId);
+                if (el) el.textContent = data[data.length - 1].toFixed(2);
+            }
+
             if (data.length < 2) {
-                ctx.fillStyle = 'rgba(200,200,220,0.6)';
-                ctx.font = '12px Roboto';
+                ctx.fillStyle = 'rgba(160,160,200,0.5)';
+                ctx.font = '12px Roboto, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
                 ctx.fillText('Waiting for data...', 12, h / 2);
                 return;
             }
@@ -196,151 +305,242 @@
             const minVal = Math.min(...data);
             const maxVal = Math.max(...data);
             const span = Math.max(0.0001, maxVal - minVal);
+            const padTop = 8, padBottom = 22;
+            const usableH = h - padTop - padBottom;
 
-            ctx.strokeStyle = 'rgba(180,180,220,0.25)';
+            // Subtle grid lines
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
             ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(0, h - 18);
-            ctx.lineTo(w, h - 18);
-            ctx.stroke();
+            for (let i = 0; i <= 2; i++) {
+                const y = padTop + (i / 2) * usableH;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+            }
 
-            ctx.strokeStyle = color;
+            const pts = data.map((v, idx) => ({
+                x: (idx / (data.length - 1)) * (w - 8) + 4,
+                y: padTop + (1 - (v - minVal) / span) * usableH
+            }));
+
+            // Gradient fill under the line
+            const grad = ctx.createLinearGradient(0, padTop, 0, h - padBottom);
+            grad.addColorStop(0, rgbaBase + '0.28)');
+            grad.addColorStop(1, rgbaBase + '0.01)');
+
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            ctx.lineTo(pts[pts.length - 1].x, h - padBottom);
+            ctx.lineTo(pts[0].x, h - padBottom);
+            ctx.closePath();
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // Line
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            ctx.strokeStyle = lineColor;
             ctx.lineWidth = 2;
-            ctx.beginPath();
-
-            data.forEach((v, idx) => {
-                const x = (idx / (data.length - 1)) * (w - 8) + 4;
-                const y = h - 18 - (((v - minVal) / span) * (h - 28));
-                if (idx === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
+            ctx.lineJoin = 'round';
             ctx.stroke();
 
-            ctx.fillStyle = 'rgba(220,220,240,0.9)';
-            ctx.font = '11px Roboto';
-            ctx.fillText(`min ${minVal.toFixed(2)} | max ${maxVal.toFixed(2)}`, 8, 12);
+            // End dot
+            const lp = pts[pts.length - 1];
+            ctx.beginPath();
+            ctx.arc(lp.x, lp.y, 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = lineColor;
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = lineColor;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Min / max labels
+            ctx.fillStyle = 'rgba(150,150,200,0.65)';
+            ctx.font = '10px Roboto, sans-serif';
+            ctx.textBaseline = 'bottom';
+            ctx.textAlign = 'left';
+            ctx.fillText(minVal.toFixed(2), 4, h - 3);
+            ctx.textAlign = 'right';
+            ctx.fillText(maxVal.toFixed(2), w - 4, h - 3);
+        }
+
+        function safetyColor(ratio) {
+            if (ratio > 0.8) return '#00ff9d';
+            if (ratio > 0.5) return '#ffb700';
+            return '#ff003c';
+        }
+
+        function speedColor(ratio) {
+            if (ratio < 0.5) return '#00ff9d';
+            if (ratio < 0.8) return '#ffb700';
+            return '#ff4b7a';
+        }
+
+        function vehicleRisk(distanceCm) {
+            if (distanceCm < 150) return { label: 'DANGER', rowCls: 'row-danger', lblCls: 'lbl-danger' };
+            if (distanceCm < 210) return { label: 'WARN',   rowCls: 'row-warning', lblCls: 'lbl-warning' };
+            return                       { label: 'OK',     rowCls: 'row-safe',    lblCls: 'lbl-safe' };
         }
 
         function updateDashboard() {
             fetch('/api/data')
-                .then(response => response.json())
+                .then(r => r.json())
                 .then(data => {
-                    const status = data.status;
+                    const status    = data.status;
                     const analytics = data.analytics || {};
-                    const controls = data.controls || {};
-                    const trends = data.trends || {};
-                    const weather = status.weather || {};
-                    const road = status.road_condition || {};
-                    const location = status.location || { lat: 0, lon: 0 };
-                    
+                    const controls  = data.controls  || {};
+                    const trends    = data.trends    || {};
+                    const weather   = status.weather        || {};
+                    const road      = status.road_condition || {};
+                    const location  = status.location       || { lat: 0, lon: 0 };
+
+                    // Connection indicator
                     const connEl = document.getElementById('connection-status');
-                    if (status.status !== "OFFLINE") {
-                        connEl.textContent = "CONNECTED";
-                        connEl.className = "status-indicator online";
+                    if (status.status !== 'OFFLINE') {
+                        connEl.textContent = 'CONNECTED';
+                        connEl.className = 'status-indicator online';
                     } else {
-                        connEl.textContent = "OFFLINE";
-                        connEl.className = "status-indicator offline";
+                        connEl.textContent = 'OFFLINE';
+                        connEl.className = 'status-indicator offline';
                     }
 
+                    // Main status + collision pulse
+                    const rawStatus = status.status || 'SAFE';
                     const mainStatusEl = document.getElementById('main-status');
-                    mainStatusEl.textContent = status.status
-                        .replace(" - ALERT + SLOWDOWN SHOWCASE", "")
-                        .replace(" - SWERVE DETECTED", "")
-                        .replace(" - OBSTACLE AHEAD", "");
-                    
-                    mainStatusEl.className = "big-text";
-                    if (status.status.includes("COLLISION")) mainStatusEl.classList.add("danger");
-                    else if (status.status.includes("WARNING")) mainStatusEl.classList.add("warning");
-                    else mainStatusEl.classList.add("safe");
+                    const statusCard   = document.getElementById('status-card');
 
-                    document.getElementById('dist-val').textContent = Math.round(status.distance) + " cm";
-                    document.getElementById('tilt-val').textContent = status.tilt.toFixed(1) + "°";
-                    document.getElementById('alert-val').textContent = status.alert_active ? "ON" : "OFF";
-                    document.getElementById('slowdown-val').textContent = Math.round(status.slowdown_showcase || 0) + "%";
+                    const shortStatus = rawStatus
+                        .replace(' - ALERT + SLOWDOWN SHOWCASE', '')
+                        .replace(' - SWERVE DETECTED', '')
+                        .replace(' - OBSTACLE AHEAD', '');
+
+                    let subText = '';
+                    if (rawStatus.includes('COLLISION'))      subText = 'Alert + Slowdown Active';
+                    else if (rawStatus.includes('SWERVE'))    subText = 'Swerve Detected';
+                    else if (rawStatus.includes('OBSTACLE'))  subText = 'Obstacle in Lane';
+
+                    mainStatusEl.textContent = shortStatus;
+                    document.getElementById('status-sub').textContent = subText;
+                    mainStatusEl.className = 'big-text';
+
+                    if (rawStatus.includes('COLLISION')) {
+                        mainStatusEl.classList.add('danger');
+                        statusCard.classList.add('collision-pulse');
+                    } else {
+                        statusCard.classList.remove('collision-pulse');
+                        if (rawStatus.includes('WARNING')) mainStatusEl.classList.add('warning');
+                        else                               mainStatusEl.classList.add('safe');
+                    }
+
+                    // Metrics
+                    document.getElementById('dist-val').textContent     = Math.round(status.distance || 0) + ' cm';
+                    document.getElementById('tilt-val').textContent     = (status.tilt || 0).toFixed(1) + '°';
+                    document.getElementById('slowdown-val').textContent = Math.round(status.slowdown_showcase || 0) + '%';
                     document.getElementById('vehicles-val').textContent = status.vehicle_count || 0;
                     document.getElementById('twowheel-val').textContent = status.two_wheeler_count || 0;
 
-                    const score = Math.round(status.safety_score);
-                    document.getElementById('score-val').textContent = score;
-                    document.getElementById('score-fill').style.height = score + "%";
-                    
-                    const scoreFill = document.getElementById('score-fill');
-                    if (score > 80) scoreFill.style.backgroundColor = "#00ff9d";
-                    else if (score > 50) scoreFill.style.backgroundColor = "#ffb700";
-                    else scoreFill.style.backgroundColor = "#ff003c";
+                    const alertEl = document.getElementById('alert-val');
+                    alertEl.textContent = status.alert_active ? 'ON' : 'OFF';
+                    alertEl.style.color = status.alert_active ? '#ff003c' : '';
 
-                    document.getElementById('speed-val').textContent = (status.speed_kmh || 0).toFixed(1) + " km/h";
-                    document.getElementById('avg-speed-val').textContent = (analytics.avg_speed_kmh || 0).toFixed(1) + " km/h";
-                    document.getElementById('max-speed-val').textContent = (analytics.max_speed_kmh || 0).toFixed(1) + " km/h";
-                    document.getElementById('trip-dist-val').textContent = (status.distance_travelled_km || 0).toFixed(2) + " km";
+                    // Arc gauges
+                    drawArcGauge('score-gauge', Math.round(status.safety_score || 100), 100, safetyColor);
+                    drawArcGauge('speed-gauge', parseFloat(status.speed_kmh || 0), 85, speedColor);
+
+                    // Analytics
+                    const spd = parseFloat(status.speed_kmh || 0);
+                    document.getElementById('speed-val').textContent      = spd.toFixed(1) + ' km/h';
+                    document.getElementById('avg-speed-val').textContent  = (analytics.avg_speed_kmh || 0).toFixed(1) + ' km/h';
+                    document.getElementById('max-speed-val').textContent  = (analytics.max_speed_kmh || 0).toFixed(1) + ' km/h';
+                    document.getElementById('trip-dist-val').textContent  = (status.distance_travelled_km || 0).toFixed(2) + ' km';
                     document.getElementById('moving-time-val').textContent = formatDuration(analytics.moving_time_sec || 0);
-                    document.getElementById('alerts-val').textContent = analytics.alerts_total || 0;
-                    document.getElementById('traffic-state').textContent = `Traffic: ${analytics.traffic_state || 'Stable'}`;
-                    document.getElementById('demo-mode').value = controls.demo_mode || 'normal';
+                    document.getElementById('alerts-val').textContent     = analytics.alerts_total || 0;
+                    document.getElementById('traffic-state').textContent  = `Traffic: ${analytics.traffic_state || 'Stable'}`;
+                    document.getElementById('demo-mode').value            = controls.demo_mode || 'normal';
 
-                    document.getElementById('road-label').textContent = road.label || "Unknown";
-                    document.getElementById('road-risk').textContent = road.risk || "Low";
-                    document.getElementById('temp-val').textContent = (weather.temperature_c || 0).toFixed(1) + " C";
-                    document.getElementById('weather-val').textContent = weather.condition || "Unknown";
-                    document.getElementById('rain-val').textContent = (weather.precipitation_mm || 0).toFixed(1) + " mm";
-                    document.getElementById('wind-val').textContent = (weather.wind_kmh || 0).toFixed(1) + " km/h";
+                    // Road & Weather
+                    const risk = road.risk || 'Low';
+                    const riskEl = document.getElementById('road-risk');
+                    riskEl.textContent = risk;
+                    riskEl.className = risk === 'High' ? 'risk-high' : risk === 'Medium' ? 'risk-medium' : 'risk-low';
+                    document.getElementById('road-label').textContent = road.label || 'Unknown';
 
+                    const weatherCode = parseInt(weather.weather_code || 0);
+                    const emoji = WEATHER_EMOJIS[weatherCode] || '🌡️';
+                    document.getElementById('temp-val').textContent    = (weather.temperature_c   || 0).toFixed(1) + '°C';
+                    document.getElementById('weather-val').textContent = `${emoji} ${weather.condition || 'Unknown'}`;
+                    document.getElementById('rain-val').textContent    = (weather.precipitation_mm || 0).toFixed(1) + ' mm';
+                    document.getElementById('wind-val').textContent    = (weather.wind_kmh         || 0).toFixed(1) + ' km/h';
+
+                    // Location + heading
                     document.getElementById('lat-val').textContent = (location.lat || 0).toFixed(6);
                     document.getElementById('lon-val').textContent = (location.lon || 0).toFixed(6);
                     document.getElementById('map-link').href = `https://maps.google.com/?q=${location.lat || 0},${location.lon || 0}`;
+                    if (status.heading_deg !== undefined && status.heading_deg !== null) {
+                        document.getElementById('heading-val').textContent = Math.round(status.heading_deg) + '°';
+                    }
 
-                    drawSparkline('speed-chart', trends.speed_kmh || [], '#00ff9d');
-                    drawSparkline('distance-chart', trends.distance_km || [], '#5ea3ff');
-                    drawSparkline('roughness-chart', trends.roughness || [], '#ffb700');
-                    drawSparkline('alerts-chart', trends.alerts_total || [], '#ff4b7a');
+                    // Sparklines
+                    drawSparkline('speed-chart',     trends.speed_kmh   || [], '#00ff9d', 'rgba(0,255,157,',   'trend-speed-cur');
+                    drawSparkline('distance-chart',  trends.distance_km || [], '#5ea3ff', 'rgba(94,163,255,',  'trend-dist-cur');
+                    drawSparkline('roughness-chart', trends.roughness   || [], '#ffb700', 'rgba(255,183,0,',   'trend-rough-cur');
+                    drawSparkline('alerts-chart',    trends.alerts_total|| [], '#ff4b7a', 'rgba(255,75,122,',  'trend-alert-cur');
 
+                    // Vehicle table with risk colour coding
                     const tableBody = document.getElementById('vehicle-table-body');
-                    tableBody.innerHTML = '';
-                    const vehicles = status.nearby_vehicles || [];
+                    const vehicles  = status.nearby_vehicles || [];
                     if (vehicles.length === 0) {
-                        tableBody.innerHTML = '<tr><td colspan="4" class="placeholder">No vehicles detected.</td></tr>';
+                        tableBody.innerHTML = '<tr><td colspan="5" class="placeholder">No vehicles detected.</td></tr>';
                     } else {
+                        tableBody.innerHTML = '';
                         vehicles.forEach(v => {
+                            const r  = vehicleRisk(v.distance_cm);
                             const tr = document.createElement('tr');
+                            tr.className = r.rowCls;
                             tr.innerHTML = `
                                 <td>${v.label}</td>
                                 <td>${Math.round(v.distance_cm)} cm</td>
                                 <td>${(v.confidence || 0).toFixed(2)}</td>
                                 <td>${v.lane}</td>
+                                <td class="${r.lblCls}">${r.label}</td>
                             `;
                             tableBody.appendChild(tr);
                         });
                     }
 
+                    // Incidents
                     const list = document.getElementById('incident-list');
-                    list.innerHTML = "";
                     if (data.incidents.length === 0) {
                         list.innerHTML = '<li class="placeholder">No incidents recorded.</li>';
                     } else {
+                        list.innerHTML = '';
                         data.incidents.forEach(inc => {
                             const li = document.createElement('li');
                             li.className = inc.type.toLowerCase();
-                            li.innerHTML = `
-                                <span class="time">${inc.time}</span>
-                                <span class="msg">${inc.message}</span>
-                            `;
+                            li.innerHTML = `<span class="time">${inc.time}</span><span class="msg">${inc.message}</span>`;
                             list.appendChild(li);
                         });
                     }
                 })
-                .catch(err => console.error("Error fetching data:", err));
+                .catch(err => console.error('Error fetching data:', err));
         }
 
-        document.getElementById('demo-mode').addEventListener('change', (event) => {
-            postControl('set_mode', { mode: event.target.value })
-                .then(() => updateDashboard())
-                .catch(err => console.error('Mode change failed:', err));
+        // Live clock
+        function updateClock() {
+            document.getElementById('live-time').textContent = new Date().toLocaleTimeString();
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        document.getElementById('demo-mode').addEventListener('change', e => {
+            postControl('set_mode', { mode: e.target.value }).then(() => updateDashboard());
         });
 
         document.getElementById('reset-trip-btn').addEventListener('click', () => {
-            postControl('reset_trip')
-                .then(() => updateDashboard())
-                .catch(err => console.error('Trip reset failed:', err));
+            postControl('reset_trip').then(() => updateDashboard());
         });
 
         updateDashboard();

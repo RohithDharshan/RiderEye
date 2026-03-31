@@ -1,1 +1,8 @@
-flask
+flask==2.3.3
+flask-cors==4.0.0
+gunicorn==21.2.0
+requests==2.31.0
+numpy<2.0
+opencv-python
+ultralytics
+torch

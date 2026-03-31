@@ -32,7 +32,7 @@ class SensorReceiver:
         if self.mode == "udp":
             print(f"SensorReceiver listening on UDP {self.ip}:{self.port}")
         else:
-            print(f"SensorReceiver polling Phyphox at http://{self.phone_ip}:8080")
+            print(f"SensorReceiver polling Phyphox at http://{self.phone_ip}:80")
 
     def stop(self):
         self.running = False
@@ -52,8 +52,8 @@ class SensorReceiver:
     def _process_phyphox(self):
         try:
             # Phyphox "Acceleration with g" exposes accX, accY, accZ
-            # URL: http://<ip>:8080/get?accX&accY&accZ
-            url = f"http://{self.phone_ip}:8080/get?accX&accY&accZ"
+            # URL: http://<ip>:80/get?accX&accY&accZ
+            url = f"http://{self.phone_ip}:80/get?accX&accY&accZ"
             # print(f"Polling: {url}") # Debug
             
             # Increased timeout to 3.0s for better stability on hotspots
@@ -72,6 +72,10 @@ class SensorReceiver:
                 ax = buf.get("accX", {}).get("buffer", [0])[0]
                 ay = buf.get("accY", {}).get("buffer", [0])[0]
                 az = buf.get("accZ", {}).get("buffer", [0])[0]
+                
+                # Skip if values are None (sensor not measuring)
+                if ax is None or ay is None or az is None:
+                    return
                 
                 # print(f"Accel: {ax}, {ay}, {az}") # Debug
                 

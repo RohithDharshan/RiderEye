@@ -1,0 +1,9 @@
+{
+  "name": "RiderEye Dashboard",
+  "description": "Real-time motorcycle collision warning system",
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ]
+}

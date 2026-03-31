@@ -1,9 +1,12 @@
 from flask import Flask, render_template, jsonify, request
+from flask_cors import CORS
 from datetime import datetime
 import time
 from collections import deque
+import os
 
 app = Flask(__name__)
+CORS(app)
 
 # In-memory storage
 current_status = {
@@ -19,6 +22,7 @@ current_status = {
     "nearby_vehicles": [],
     "speed_kmh": 0.0,
     "distance_travelled_km": 0.0,
+    "heading_deg": 0.0,
     "location": {"lat": 0.0, "lon": 0.0},
     "weather": {
         "condition": "Unknown",
@@ -218,4 +222,6 @@ def _log_incident(type, message):
         incidents.pop()
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5050)
+    port = int(os.environ.get('PORT', 5050))
+    debug = os.environ.get('FLASK_ENV') != 'production'
+    app.run(debug=debug, port=port, host='0.0.0.0')
